@@ -6,7 +6,7 @@ import cartopy.feature as cfeature
 import matplotlib.ticker as mticker
 from matplotlib.gridspec import GridSpec
 
-# --- Load wind data ---
+#Load wind data
 Wind = xr.open_dataset("cmems_obs-wind_glo_phy_my_l3-metopa-ascat-des-0.25deg_P1D-i_multi-vars_10.88W-15.88E_15.88S-10.88N_2010-01-01-2021-11-15.nc")
 u_wind = Wind['eastward_wind']
 v_wind = Wind['northward_wind']
@@ -31,14 +31,14 @@ ws_djfm = wind_speed.sel(time=djfm_mask).mean(dim='time')
 vmin, vmax = 0, np.ceil(np.nanmax([ws_jas.max(), ws_djfm.max()]))
 contour_levels = np.linspace(vmin, vmax, 100)
 
-# --- Load Sea Surface Temperature (SST) data ---
+#Load Temperature data
 OSTIA = xr.open_dataset('/mnt/e/DD2/Python/donnee/SST.nc')
 sst = OSTIA['analysed_sst'] - 273.15  # Convert from Kelvin to Celsius
 lat_sst = OSTIA['latitude']
 lon_sst = OSTIA['longitude']
 
-jas_mask_sst = (OSTIA['time'].dt.month >= 7) & (OSTIA['time'].dt.month <= 9)    # Monsoon (JAS)
-djfm_mask_sst = (OSTIA['time'].dt.month == 12) | (OSTIA['time'].dt.month <= 3)  # Harmattan (DJFM)
+jas_mask_sst = (OSTIA['time'].dt.month >= 6) & (OSTIA['time'].dt.month <= 9)    # Monsoon 
+djfm_mask_sst = (OSTIA['time'].dt.month == 12) | (OSTIA['time'].dt.month <= 3)  # Harmattan 
 
 # Seasonal mean SST
 sst_mean_jas = sst.sel(time=jas_mask_sst).mean(dim='time')
@@ -46,7 +46,7 @@ sst_mean_djfm = sst.sel(time=djfm_mask_sst).mean(dim='time')
 
 contour_levels_sst = np.linspace(15, 30, 100)
 
-# --- Plot wind data for Harmattan (DJFM) and Monsoon (JAS) ---
+#Plot wind data for Harmattan and Monsoon
 fig = plt.figure(figsize=(14, 6))
 gs = GridSpec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.08, figure=fig)
 
@@ -56,7 +56,7 @@ cf1 = ax1.contourf(lon_wind, lat_wind, ws_djfm, levels=contour_levels, cmap='pla
 ax1.coastlines(resolution='10m', linewidth=0.8)
 ax1.add_feature(cfeature.BORDERS, linewidth=0.5)
 ax1.add_feature(cfeature.LAND, facecolor='lightgray')
-ax1.set_title('A) Harmattan (DJFM)', fontweight='bold')
+ax1.set_title('A) Harmattan', fontweight='bold')
 
 step = 5
 scale_val = 150
@@ -77,7 +77,7 @@ cf2 = ax2.contourf(lon_wind, lat_wind, ws_jas, levels=contour_levels, cmap='plas
 ax2.coastlines(resolution='10m', linewidth=0.8)
 ax2.add_feature(cfeature.BORDERS, linewidth=0.5)
 ax2.add_feature(cfeature.LAND, facecolor='lightgray')
-ax2.set_title('B) Monsoon (JAS)', fontweight='bold')
+ax2.set_title('B) Monsoon', fontweight='bold')
 
 q2 = ax2.quiver(
     lon_wind[::step], lat_wind[::step],
@@ -118,7 +118,7 @@ plt.savefig('wind_harmattan_monsoon.png', dpi=300, bbox_inches='tight')
 plt.show()
 
 
-# --- Plot SST data for Harmattan (DJFM) and Monsoon (JAS) ---
+#Plot SST data for Harmattan  and Monsoon (
 fig2 = plt.figure(figsize=(14, 6))
 gs2 = GridSpec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.08, figure=fig2)
 
@@ -128,7 +128,7 @@ cf3 = ax3.contourf(lon_sst, lat_sst, sst_mean_djfm, levels=contour_levels_sst, c
 ax3.coastlines(resolution='10m', linewidth=0.8)
 ax3.add_feature(cfeature.BORDERS, linewidth=0.5)
 ax3.add_feature(cfeature.LAND, facecolor='lightgray')
-ax3.set_title('C) Harmattan SST (DJFM)', fontweight='bold')
+ax3.set_title('C) Harmattan SST', fontweight='bold')
 
 # Monsoon SST
 ax4 = fig2.add_subplot(gs2[1], projection=ccrs.PlateCarree())
@@ -136,7 +136,7 @@ cf4 = ax4.contourf(lon_sst, lat_sst, sst_mean_jas, levels=contour_levels_sst, cm
 ax4.coastlines(resolution='10m', linewidth=0.8)
 ax4.add_feature(cfeature.BORDERS, linewidth=0.5)
 ax4.add_feature(cfeature.LAND, facecolor='lightgray')
-ax4.set_title('D) Monsoon SST (JAS)', fontweight='bold')
+ax4.set_title('D) Monsoon SST', fontweight='bold')
 
 # Format axes: ticks and labels
 for ax in [ax3, ax4]:
