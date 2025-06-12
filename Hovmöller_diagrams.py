@@ -1,75 +1,84 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 
-# Open NetCDF file
-data = xr.open_dataset('sortie_model.nc')
+# -----------------------------------------------------------------------------
+# Author: Mr. EBOLO NKONGO Victor
+# Project: Interannual Variation Analysis Using Hovmöller Diagrams
+# -----------------------------------------------------------------------------
 
-# Add 'month' variable for seasonal filtering
+# Load generic model output dataset
+data = xr.open_dataset('model_output.nc')
+
+# Add 'month' for seasonal grouping
 data["month"] = data["time"].dt.month
 
-# Define months for each season
-monsoon_months = [6, 7, 8, 9]    # (Monsoon)
-harmattan_months = [12, 1, 2,3]    #  (Harmattan)
+# Define seasons and their months
+seasons = {
+    "Winter": [12, 1, 2],
+    "Spring": [3, 4, 5],
+    "Summer": [6, 7, 8],
+    "Autumn": [9, 10, 11]
+}
 
-# Variables to analyse with clearer naming
+# Define generic variables
 variables = {
-    "TA-LIAR": data["LIAR"],    # Total alkalinity
-    "DIC-M": data["DICV"],      # Dissolved inorganic carbon
-    "pCO2": data["pco2"],      # Partial pressure of CO2
-    "pH": data["ph"]            # pH level
+    "Var1": data["var1"],
+    "Var2": data["var2"],
+    "Var3": data["var3"],
+    "Var4": data["var4"]
 }
 
-# vmin and vmax values for each variable and season (for colour scale)
-vmin_max_dict = {
-    "TA-LIAR": {"Monsoon": (2200, 2350), "Harmattan": (2200, 2350)},
-    "DIC-M": {"Monsoon": (1950, 2100), "Harmattan": (1950, 2100)},
-    "pCO2": {"Monsoon": (360, 430), "Harmattan": (360, 430)},
-    "pH": {"Monsoon": (8.01, 8.08), "Harmattan": (8.01, 8.08)}
+# Color scale limits for each variable and season (vmin, vmax)
+vmin_max = {
+    "Var1": {"Winter": (100, 200), "Spring": (110, 210), "Summer": (120, 220), "Autumn": (115, 215)},
+    "Var2": {"Winter": (10, 30), "Spring": (15, 35), "Summer": (20, 40), "Autumn": (18, 38)},
+    "Var3": {"Winter": (300, 400), "Spring": (310, 410), "Summer": (320, 420), "Autumn": (315, 415)},
+    "Var4": {"Winter": (7.9, 8.1), "Spring": (7.85, 8.05), "Summer": (7.95, 8.15), "Autumn": (7.90, 8.10)}
 }
 
-def plot_hovmoller(var, name, months, season_name, ax, vmin, vmax):
+def plot_hovmoller(var, label, months, season, ax, vmin, vmax):
     """
-    Plot a Hovmöller diagram (time vs latitude) for a given variable
-    and specific season, with filled contours and contour lines.
+    Plot a Hovmöller diagram for the given variable and season.
+    Zonal mean is calculated and displayed as filled contours over time and latitude.
     """
-    # Filter data for the season
-    var_season = var.where(data["month"].isin(months), drop=True)
-    
-    # Average over longitude to obtain lat/time section
-    var_lon_mean = var_season.mean(dim="longitude")
-    
-    # Plot filled contours
-    c = ax.contourf(
-        var_lon_mean["time"], var_lon_mean["latitude"],
-        var_lon_mean.transpose(),
-        cmap="jet", levels=100, vmin=vmin, vmax=vmax
+    seasonal_data = var.where(data["month"].isin(months), drop=True)
+    zonal_mean = seasonal_data.mean(dim="longitude")
+
+    contour = ax.contourf(
+        zonal_mean["time"],
+        zonal_mean["latitude"],
+        zonal_mean.transpose(),
+        cmap="jet",
+        levels=100,
+        vmin=vmin,
+        vmax=vmax
+    )
+    ax.contour(
+        zonal_mean["time"],
+        zonal_mean["latitude"],
+        zonal_mean.transpose(),
+        colors='k',
+        linewidths=0.5
     )
     
-    # Add black contour lines
-    ax.contour(var_lon_mean["time"], var_lon_mean["latitude"], var_lon_mean.transpose(), colours='k', linewidths=0.5)
-    
-    # Title, labels and grid
-    ax.set_title(f"{season_name.capitalize()}", fontsize=16)
-    ax.set_xlabel("Time", fontsize=14)
-    ax.set_ylabel("Latitude (°)", fontsize=14)
+    ax.set_title(f"{season}", fontsize=14)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Latitude (°)")
     ax.grid(True)
     
-    # Colour bar with label
-    cbar = plt.colorbar(c, ax=ax)
-    cbar.set_label(name, fontsize=12)
-    
-    return var_lon_mean
+    cbar = plt.colorbar(contour, ax=ax)
+    cbar.set_label(label, fontsize=10)
 
-# Create a 4x2 figure for 4 variables x 2 seasons
-fig, axes = plt.subplots(4, 2, figsize=(14, 20))
+# Create plot grid for 4 variables and 4 seasons
+fig, axes = plt.subplots(4, 4, figsize=(18, 20))
+axes = axes.reshape(4, 4)
 
-# Loop through each variable and season to plot
-for i, (var_name, var) in enumerate(variables.items()):
-    for j, (season_name, months) in enumerate([("Monsoon", monsoon_months), ("Harmattan", harmattan_months)]):
+for i, (var_label, var_data) in enumerate(variables.items()):
+    for j, (season_name, months_list) in enumerate(seasons.items()):
         ax = axes[i, j]
-        vmin, vmax = vmin_max_dict[var_name][season_name]
-        plot_hovmoller(var, var_name, months, season_name, ax, vmin, vmax)
+        vmin, vmax = vmin_max[var_label][season_name]
+        plot_hovmoller(var_data, var_label, months_list, season_name, ax, vmin, vmax)
 
 plt.tight_layout()
-plt.savefig("hovmoller_all_variables_with_seasons_large_font.png", dpi=300)
+plt.savefig("seasonal_hovmoller.png", dpi=300)
 plt.show()
