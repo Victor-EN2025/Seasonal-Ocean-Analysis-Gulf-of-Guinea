@@ -1,0 +1,92 @@
+# =============================================================
+# Monthly Zonal Climatology Plotting Script
+# Author: EBOLO NKONGO Victor
+# Description: This script generates monthly climatology plots
+# for several oceanographic variables (e.g., pH, pCO₂),
+# averaged longitudinally and displayed with smooth contours.
+# Variable names have been anonymised for publication purposes.
+# =============================================================
+
+import xarray as xr
+import matplotlib.pyplot as plt
+import calendar
+import numpy as np
+from matplotlib.ticker import FormatStrFormatter
+
+# Function to generate 5 evenly spaced ticks
+def five_ticks(vmin, vmax):
+    return np.linspace(vmin, vmax, 5)
+
+# Function to plot monthly climatology
+def plot_monthly_climatology(var, name, ax, vmin, vmax, decimals, unit):
+    var_monthly = var.groupby("time.month").mean("time")
+    var_clim = var_monthly.mean(dim="longitude")
+    z = var_clim.transpose("latitude", "month")
+
+    months = np.arange(1, 13)
+    month_labels = [calendar.month_abbr[m] for m in months]
+    latitudes = var_clim["latitude"]
+
+    c = ax.contourf(
+        months, latitudes, z,
+        levels=500, cmap="jet", vmin=vmin, vmax=vmax
+    )
+    ax.contour(months, latitudes, z, colors='k', linewidths=0.3)
+
+    ax.set_title(f"{name} – Monthly Climatology", fontsize=14)
+    ax.set_xlabel("Month", fontsize=12)
+    ax.set_ylabel("Latitude", fontsize=12)
+    ax.set_xticks(months)
+    ax.set_xticklabels(month_labels)
+    ax.grid(True)
+
+    ticks = five_ticks(vmin, vmax)
+    fmt = f"%.{decimals}f"
+    cbar = plt.colorbar(c, ax=ax, format=FormatStrFormatter(fmt), ticks=ticks)
+    label = f"{name} ({unit})" if unit else name
+    cbar.set_label(label, fontsize=12)
+
+# Load NetCDF data (generic filename)
+data = xr.open_dataset("your_dataset.nc")
+data["month"] = data["time"].dt.month
+
+# Dictionary of units (generic)
+units = {
+    "Var1": "unit1",
+    "Var2": "unit2",
+    "Var3": "unit3",
+    "Var4": "unit4"
+}
+
+# Anonymised variables
+variables = {
+    "Var1": {"var": data["var1"], "vmin": 100, "vmax": 500, "decimals": 0},
+    "Var2": {"var": data["var2"], "vmin": 300, "vmax": 600, "decimals": 0},
+    "Var3": {"var": data["var3"], "vmin": 350, "vmax": 450, "decimals": 0},
+    "Var4": {"var": data["var4"], "vmin": 7.9, "vmax": 8.2, "decimals": 2}
+}
+
+# Create figure
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+axes = axes.flatten()
+
+# Plot each variable
+for i, (name, info) in enumerate(variables.items()):
+    var = info["var"]
+    vmin = info["vmin"]
+    vmax = info["vmax"]
+    decimals = info["decimals"]
+
+    var_monthly = var.groupby("time.month").mean("time")
+    var_clim = var_monthly.mean(dim="longitude")
+    z = var_clim.transpose("latitude", "month")
+    
+    real_min = float(z.min().values)
+    real_max = float(z.max().values)
+    print(f"▶ {name}: climatology = [{real_min:.3f}, {real_max:.3f}], bounds = [{vmin}, {vmax}]")
+
+    plot_monthly_climatology(var, name, axes[i], vmin, vmax, decimals, units[name])
+
+plt.tight_layout()
+plt.savefig("zonal_climatology.png", dpi=300, bbox_inches="tight")
+plt.show()
