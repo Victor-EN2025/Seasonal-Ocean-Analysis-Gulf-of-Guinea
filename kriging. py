@@ -1,0 +1,81 @@
+# =============================================================================
+# Author       : EBOLO NKONGO Victor
+# University   : University of Douala, Institute of Fisheries and Aquatic Sciences (ISH)
+# Description  : Implementation of 2D ordinary kriging with a stable variogram model
+# Date         : May 2024
+# =============================================================================
+
+import numpy as np
+from scipy.spatial.distance import cdist
+from numpy.linalg import pinv
+
+def stable_variogram(params, h):
+    """Stable variogram model."""
+    range_, sill = params
+    return sill * (1 - np.exp(-(h / range_)**1.5))  # alpha = 1.5
+
+def kriging(vstruct, x, y, z, xi, yi, chunksize=100):
+    """
+    2D ordinary kriging.
+    Inputs:
+        - vstruct : dictionary with keys 'range', 'sill', 'nugget', 'type', 'func'
+        - x, y, z : coordinates and known values
+        - xi, yi : grid points for interpolation
+        - chunksize : size of data blocks to process (default = 100)
+    Outputs:
+        - zi : interpolated values
+        - s2zi : kriging variance
+    """
+    x = np.asarray(x).ravel()
+    y = np.asarray(y).ravel()
+    z = np.asarray(z).ravel()
+    xi = np.asarray(xi).ravel()
+    yi = np.asarray(yi).ravel()
+
+    numobs = len(x)
+    numest = len(xi)
+    zi = np.full(numest, np.nan)
+    s2zi = np.full(numest, np.nan)
+
+    # Distance matrix between known points
+    dx = cdist(np.column_stack((x, y)), np.column_stack((x, y)))
+    if vstruct['type'] == 'bounded':
+        dx = np.minimum(dx, vstruct['range'])
+
+    A = vstruct['func']([vstruct['range'], vstruct['sill']], dx)
+    if vstruct.get('nugget', 0) > 0:
+        A += vstruct['nugget']
+    A = np.vstack([np.hstack([A, np.ones((numobs, 1))]), np.hstack([np.ones((1, numobs)), np.zeros((1, 1))])])
+    Ainv = pinv(A)
+    z_ext = np.append(z, 0)
+
+    # Block-wise interpolation
+    for r in range(0, numest, chunksize):
+        IX = slice(r, min(r + chunksize, numest))
+        pts_interp = np.column_stack((xi[IX], yi[IX]))
+        dists = cdist(np.column_stack((x, y)), pts_interp)
+        if vstruct['type'] == 'bounded':
+            dists = np.minimum(dists, vstruct['range'])
+
+        b = vstruct['func']([vstruct['range'], vstruct['sill']], dists)
+        if vstruct.get('nugget', 0) > 0:
+            b += vstruct['nugget']
+        b = np.vstack([b, np.ones((1, b.shape[1]))])
+        lambdas = Ainv @ b
+        zi[IX] = lambdas.T @ z_ext
+        s2zi[IX] = np.sum(b * lambdas, axis=0)
+
+    return zi, s2zi
+
+def build_stable_variogram(range_, sill, nugget=0.0, type_='bounded'):
+    """
+    Constructs a vstruct dictionary using a stable variogram model.
+    """
+    return {
+        'range': range_,
+        'sill': sill,
+        'nugget': nugget,
+        'type': type_,
+        'model': 'stable',
+        'func': stable_variogram
+    }
