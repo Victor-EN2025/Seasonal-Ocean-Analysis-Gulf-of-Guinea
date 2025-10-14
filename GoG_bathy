@@ -1,0 +1,64 @@
+clear all, close all, clc
+bathy = ('data.nc');
+ncdisp(bathy);
+lonb = ncread(bathy, 'lon');
+latb = ncread(bathy, 'lat');
+zb = ncread(bathy, 'elevation');
+[X, Y] = meshgrid(lonb, latb);
+
+% Plotting
+figure;
+m_proj('mercator', 'lon2', [-50  -10], 'lat2', [5 30]); % Mercator projection
+
+% Displaying the data
+[CS, CH] = m_contourf(X, Y, zb', [-6000:100:0], 'edgecolor', 'none');
+shading interp; % Smoothing
+%colorbar;
+colormap(m_colmap('blues'));
+%caxis([-6000 000]);
+
+% Adding coastlines to display the continents
+m_gshhs_i('patch', [.5 .5 .5]); % Light grey continents
+m_gshhs('fb1', 'color', 'k', 'linewidth', 1);  % Black administrative borders with fine resolution
+m_gshhs('ir'); % Rivers of choice
+% Grid with options
+%m_grid('box', 'fancy', 'tickdir', 'in', 'xlabeldir', 'end', 'ylabeldir', end'); 
+m_grid('box', 'fancy', 'tickdir', 'in', 'box', 'fancy');
+ax = m_contfbar(.85, [.5 .9], [-6000 0], [-6000:100:000], 'edgecolor', 'none', 'endpiece', 'no');
+set(ax, 'XDir', 'reverse');
+xlabel(ax, 'Bathymetry [m]', 'color', 'k', 0, 'HorizontalAlignment', 'right');
+%zlabel('Bathymetry [m]')
+
+print('bathymetryBON.jpg', '-djpeg', '-r800', '-opengl'); % Save the figure for good resolution
+
+m_proj('utm', 'ellipse', 'grs80', 'zone', 10, 'lat', [49+15.7/60 49+21/60], ...
+        'long', [-123-15/60 -123-3/60]);
+
+% Uses multibeam bathymetry with 10m horizontal resolution
+% Already regularly gridded in UTM coords with vector x2/y2, and
+% matrix Z2.
+caxis([-150 0]);
+colormap([m_colmap('water', 128)]);
+m_shadedrelief(x2, y2, -Z2, 'lightangle', -45, 'gradient', 8, 'coord', 'z');
+
+% Add some contours
+hold on;
+
+[cs, h] = contour(x2, y2, Z2, [0:20:150], 'color', 'k');
+clabel(cs, h, 'fontsize', 6);
+hold off;
+
+% Land parts from a previously saved high-resolution coastline
+col = [255 214 140] / 255; % CHS chart land colour
+
+m_usercoast('/ocean/rich/more/mmapbase/bcgeo/PNW.mat', 'patch', col);
+m_usercoast('/ocean/rich/more/mmapbase/bcgeo/PNWrivers.mat', 'patch', col);
+
+% Lat/long AND a UTM grid
+m_grid('tickdir', 'out', 'fontsize', 12, 'linest', 'none', 'xaxisloc', 'top', 'yaxisloc', 'right');
+m_utmgrid('xcolor', 'b', 'ycolor', 'b', 'linest', '-');
+
+m_ruler([.5 .8], .9, 'tickdir', 'out', 'ticklen', [.007 .007]);
+m_northarrow(-123-4.5/60, 49+19.5/60, 1/60, 'type', 4, 'aspect', 1.5);
+
+xlabel('Vancouver Harbour', 'color', 'k');
