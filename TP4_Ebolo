@@ -1,0 +1,221 @@
+
+% CIPMA-CHAIRE UNESCO
+% M2 OPA 2025
+% TP MATLAB - TP4
+% Auteur : Ebolo Nkongo Victor
+% Date : 15 octobre 2025
+%=======================================================================================================================
+% TP 4
+ 
+% utilisation des simulations Model (data4)
+%=======================================================================================================================
+
+clear; close all; clc;
+
+%% Chemins fichiers
+model_file      = 'data.nc';
+u_file          = 'data.nc';
+v_file          = 'data.nc';
+salt_model_file = model_file;
+
+obs_temp_file = 'data.cdf';
+obs_salt_file = 'data.cdf';
+sst_obs_file  = 'data.nc';
+
+%% variable Modèle 
+lon   = ncread(model_file,'nav_lon');
+lat   = ncread(model_file,'nav_lat');
+depth = ncread(model_file,'deptht');
+
+temp = mean(ncread(model_file,'votemper'),4,'omitnan');
+salt = mean(ncread(salt_model_file,'vosaline'),4,'omitnan');
+u    = mean(ncread(u_file,'vozocrtx'),4,'omitnan');
+v    = mean(ncread(v_file,'vomecrty'),4,'omitnan');
+
+%% variable Observation SST 
+sst = ncread(sst_obs_file,'sst');      
+la  = ncread(sst_obs_file,'latitude');
+lo  = ncread(sst_obs_file,'longitude');
+time_obs = ncread(sst_obs_file,'time');
+
+% Conversion temps en datetime
+ref = datetime(1950,1,1,0,0,0);
+timeDatetime = ref + days(time_obs);
+
+% Moyenne temporelle SST et filtrage valeurs aberrantes
+sst_mean = mean(sst,3,'omitnan');
+sst_mean(sst_mean>50) = NaN;
+
+% Ajustement longitude
+ind_lo = find(lo >= 295 & lo <= 378);
+lo1 = lo(ind_lo)-360;
+sst_mean = sst_mean(ind_lo,:);
+
+%% SST Modèle
+t_mod = temp(:,:,1);
+t_mod(t_mod==0) = NaN;
+
+%% Cartes SST 
+figure('Position',[100 100 1200 500]);
+
+% Modèle
+subplot(1,3,1)
+contourf(lon, lat, t_mod, 20,'LineStyle','none'); hold on
+contour(lon, lat, t_mod, 10,'k'); colorbar; colormap jet
+xlabel('Longitude'); ylabel('Latitude'); title('Model'); caxis([20 30])
+
+% SST Observée
+subplot(1,3,2)
+contourf(lo1, la, sst_mean', 20,'LineStyle','none'); hold on
+contour(lo1, la, sst_mean', 10,'k'); axis([-60 15 -20 20])
+colorbar; colormap jet; xlabel('Longitude'); ylabel('Latitude'); title('Observation'); caxis([20 30])
+
+% Biais Modèle - Obs
+[LO,LA] = meshgrid(lo1, la);
+Tobs_interp = interp2(LO,LA,sst_mean',lon,lat);
+bias = t_mod - Tobs_interp;
+
+subplot(1,3,3)
+contourf(lon, lat, bias,20,'LineStyle','none'); hold on
+contour(lon, lat, bias,10,'k'); colorbar; colormap jet
+xlabel('Longitude'); ylabel('Latitude'); title('Biais SST [°C]'); caxis([-2 2])
+sgtitle('SST : Modèle vs Observation')
+
+%% Énergie cinétique 
+u_surf = mean(u(:,:,1,:),4,'omitnan');
+v_surf = mean(v(:,:,1,:),4,'omitnan');
+
+[Lon_u, Lat_u] = meshgrid(lon(:,1), lat(1,:)');  
+[Lon_v, Lat_v] = meshgrid(lon(:,1), lat(1,:)'); 
+
+u_interp = interp2(Lon_u, Lat_u, u_surf', lon, lat);
+v_interp = interp2(Lon_v, Lat_v, v_surf', lon, lat);
+
+KE_mean = 0.5*(u_interp.^2 + v_interp.^2);
+
+% Masque continent
+KE_masked = KE_mean; u_masked = u_interp; v_masked = v_interp;
+[nx,ny] = size(t_mod);
+for i=1:nx
+    for j=1:ny
+        if isnan(t_mod(i,j)) || t_mod(i,j)==0
+            KE_masked(i,j) = NaN;
+            u_masked(i,j) = NaN;
+            v_masked(i,j) = NaN;
+        end
+    end
+end
+
+figure('Position',[100 100 600 500])
+contourf(lon,lat,KE_masked,20,'LineStyle','none'); hold on
+quiver(lon(1:3:end,1:3:end),lat(1:3:end,1:3:end),...
+       u_masked(1:3:end,1:3:end),v_masked(1:3:end,1:3:end),'k');
+colorbar; colormap jet; xlabel('Longitude'); ylabel('Latitude'); title('Énergie cinétique')
+axis([-60 15 -20 20]); caxis([0 0.1])
+
+%% Section méridienne 10°W (0-120 m) 
+lon_sel = -10; lat_min=-5; lat_max=5;
+[~, lon_idx] = min(abs(lon(:,1)-lon_sel));
+lat_vec = lat(1,:);
+lat_idx = find(lat_vec>=lat_min & lat_vec<=lat_max);
+lat_sel = lat_vec(lat_idx);
+
+u_sec    = squeeze(u(lon_idx,lat_idx,:));
+temp_sec = squeeze(temp(lon_idx,lat_idx,:));
+salt_sec = squeeze(salt(lon_idx,lat_idx,:));
+
+if size(u_sec,1) ~= length(depth)
+    u_sec=temp_sec'; temp_sec=temp_sec'; salt_sec=salt_sec';
+end
+
+depth_max = 120;
+depth_idx = find(depth<=depth_max);
+depth_mod = depth(depth_idx);
+
+u_sec    = u_sec(depth_idx,:); 
+temp_sec = temp_sec(depth_idx,:); 
+salt_sec = salt_sec(depth_idx,:);
+
+fields_sec = {u_sec,temp_sec,salt_sec};
+titles_sec = {'Courant zonal (m/s)','Température (°C)','Salinité (PSU)'};
+
+figure('Name','Sections méridiennes 10°W (0-120 m)','Position',[100 100 1200 400])
+for i=1:3
+    subplot(1,3,i)
+    contourf(lat_sel,depth_mod,fields_sec{i},20,'LineColor','none'); colorbar; axis ij
+    xlabel('Latitude (°)'); ylabel('Profondeur (m)'); title(titles_sec{i})
+end
+sgtitle('Sections méridiennes moyennes à 10°W (5°S–5°N, 0-120 m)')
+
+%% Profils Modèle 0°N-10°W 
+lat0=0; lon0=-10;
+[~,lat0_idx] = min(abs(lat_vec-lat0));
+[~,lon0_idx] = min(abs(lon(:,1)-lon0));
+
+T_profile_mod = squeeze(temp(lon0_idx,lat0_idx,depth_idx));
+S_profile_mod = squeeze(salt(lon0_idx,lat0_idx,depth_idx));
+
+%%  PIRATA 
+% Température
+Tobs = ncread(obs_temp_file,'T_20'); QT = ncread(obs_temp_file,'QT_5020');
+depth_T = ncread(obs_temp_file,'depth'); depth_T = depth_T(:);
+
+T_profile_obs = nan(length(depth_T),1);
+for k=1:length(depth_T)
+    idx = find(squeeze(QT(1,1,k,:))==2);
+    if ~isempty(idx)
+        T_profile_obs(k) = mean(squeeze(Tobs(1,1,k,idx)),'omitnan');
+    end
+end
+mask_T = depth_T<=depth_max;
+T_profile_obs = T_profile_obs(mask_T);
+depth_T = depth_T(mask_T);
+
+% Salinité
+Sobs = ncread(obs_salt_file,'S_41'); QS = ncread(obs_salt_file,'QS_5041');
+depth_S = ncread(obs_salt_file,'depth'); depth_S = depth_S(:);
+
+S_profile_obs = nan(length(depth_S),1);
+for k=1:length(depth_S)
+    idx = find(squeeze(QS(1,1,k,:))==2);
+    if ~isempty(idx)
+        S_profile_obs(k) = mean(squeeze(Sobs(1,1,k,idx)),'omitnan');
+    end
+end
+mask_S = depth_S<=depth_max;
+S_profile_obs = S_profile_obs(mask_S);
+depth_S = depth_S(mask_S);
+
+%% Interpolation PIRATA sur profondeur modèle
+T_profile_obs_interp = interp1(depth_T,T_profile_obs,depth_mod,'linear','extrap');
+S_profile_obs_interp = interp1(depth_S,S_profile_obs,depth_mod,'linear','extrap');
+
+%% Densité et Stratification 
+g = 9.81; rho0 = 1025;
+P_mod = zeros(size(T_profile_mod));
+P_obs = zeros(size(T_profile_obs_interp));
+
+rho_mod = sw_dens(S_profile_mod,T_profile_mod,P_mod);
+rho_obs = sw_dens(S_profile_obs_interp,T_profile_obs_interp,P_obs);
+
+N2_mod = -(g/rho0) * gradient(rho_mod, depth_mod);
+N2_obs = -(g/rho0) * gradient(rho_obs, depth_mod);
+
+%% Figures Profils 
+figure('Position',[100 100 1200 600])
+vars = {T_profile_mod,T_profile_obs_interp; S_profile_mod,S_profile_obs_interp; rho_mod,rho_obs; N2_mod,N2_obs};
+titles = {'Température','Salinité','Densité','Stratification'};
+xlabels = {'Température (°C)','Salinité (PSU)','Densité (kg/m³)','N² (s⁻²)'};
+
+for i=1:4
+    subplot(2,2,i)
+    plot(vars{i,1},depth_mod,'-r','LineWidth',1.5); hold on
+    plot(vars{i,2},depth_mod,'-b','LineWidth',1.5)
+    axis ij
+    xlabel(xlabels{i}); ylabel('Profondeur (m)')
+    legend('Modèle','PIRATA'); title(titles{i})
+end
+sgtitle('Profils verticaux à 0°N–10°W : Modèle vs PIRATA 0-120 m')
+
+%% Exercice 3a : Carte température surface 20 juillet 2012
+
